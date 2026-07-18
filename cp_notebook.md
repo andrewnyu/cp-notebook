@@ -134,12 +134,12 @@ import heapq
 
 dist = [INF] * n
 dist[s] = 0
-pq = [(0, s)]
+pq = [(0, s)]                      # min-heap of (distance, node)
 
 while pq:
     d, u = heapq.heappop(pq)
     if d != dist[u]:
-        continue
+        continue                   # stale entry: a shorter path to u was already popped
     for v, w in g[u]:
         if dist[v] > d + w:
             dist[v] = d + w
@@ -152,15 +152,15 @@ Bellman-Ford: negative edges, negative cycle detection.
 dist = [INF] * n
 dist[s] = 0
 
-for _ in range(n - 1):
+for _ in range(n - 1):                              # a simple path has at most n-1 edges
     for u, v, w in edges:
         if dist[u] < INF and dist[v] > dist[u] + w:
             dist[v] = dist[u] + w
 
-neg_cycle = False
-for u, v, w in edges:
-    if dist[u] < INF and dist[v] > dist[u] + w:
-        neg_cycle = True
+has_negative_cycle = False
+for u, v, w in edges:                               # one more pass: any improvement now
+    if dist[u] < INF and dist[v] > dist[u] + w:      # means a negative cycle is reachable
+        has_negative_cycle = True
 ```
 
 Why `n-1`: shortest simple path has at most `n-1` edges. One more improvement means reachable negative cycle.
@@ -171,28 +171,30 @@ Kruskal: sort edges + DSU. Better when edge list is natural/sparse.
 
 ```python
 parent = list(range(n))
-size = [1] * n
+size = [1] * n                        # size of the tree rooted at each index
 
 def find(x):
     while parent[x] != x:
-        parent[x] = parent[parent[x]]
+        parent[x] = parent[parent[x]]     # path halving: hop x toward its grandparent
         x = parent[x]
     return x
 
 def union(a, b):
-    ra, rb = find(a), find(b)
-    if ra == rb:
-        return False
-    if size[ra] < size[rb]:
-        ra, rb = rb, ra
-    parent[rb] = ra
-    size[ra] += size[rb]
+    root_a, root_b = find(a), find(b)
+    if root_a == root_b:
+        return False                      # already connected -> this edge would close a cycle
+
+    if size[root_a] < size[root_b]:
+        root_a, root_b = root_b, root_a   # merge the smaller tree into the larger one
+
+    parent[root_b] = root_a
+    size[root_a] += size[root_b]
     return True
 
-mst = 0
-for w, u, v in sorted(edges):
+mst_weight = 0
+for weight, u, v in sorted(edges):        # cheapest edges first
     if union(u, v):
-        mst += w
+        mst_weight += weight
 ```
 
 Prim: grow from a node using cheapest crossing edge. Nice with adjacency list.
@@ -200,19 +202,19 @@ Prim: grow from a node using cheapest crossing edge. Nice with adjacency list.
 ```python
 import heapq
 
-seen = [False] * n
-pq = [(0, 0)]                 # cost, node
-mst = 0
+visited = [False] * n
+pq = [(0, 0)]                  # (edge cost, node); start growing from node 0
+mst_weight = 0
 
 while pq:
-    w, u = heapq.heappop(pq)
-    if seen[u]:
-        continue
-    seen[u] = True
-    mst += w
-    for v, cost in g[u]:
-        if not seen[v]:
-            heapq.heappush(pq, (cost, v))
+    cost, u = heapq.heappop(pq)
+    if visited[u]:
+        continue                # stale entry: u was already added via a cheaper edge
+    visited[u] = True
+    mst_weight += cost
+    for v, edge_cost in g[u]:
+        if not visited[v]:
+            heapq.heappush(pq, (edge_cost, v))
 ```
 
 If graph may be disconnected, count visited nodes or run Prim per component.
@@ -222,19 +224,19 @@ If graph may be disconnected, count visited nodes or run Prim per component.
 ```python
 from collections import deque
 
-q = deque(i for i in range(n) if indeg[i] == 0)
+queue = deque(i for i in range(n) if indeg[i] == 0)   # start from nodes with no prerequisites
 order = []
 
-while q:
-    u = q.popleft()
+while queue:
+    u = queue.popleft()
     order.append(u)
     for v in g[u]:
         indeg[v] -= 1
-        if indeg[v] == 0:
-            q.append(v)
+        if indeg[v] == 0:              # all of v's prerequisites are now done
+            queue.append(v)
 
-for u in order:
-    for v, w in g[u]:
+for u in order:                         # process in topological order so dp[u] is final
+    for v, w in g[u]:                   # before it's used to update dp[v]
         dp[v] = max(dp[v], dp[u] + w)
 ```
 
@@ -250,11 +252,11 @@ def dfs1(u):
     for v in g[u]:
         if not seen[v]:
             dfs1(v)
-    order.append(u)
+    order.append(u)                # postorder: a node is appended only after all its descendants
 
 def dfs2(u, c):
     comp[u] = c
-    for v in rg[u]:
+    for v in rg[u]:                # walk the REVERSED graph this time
         if comp[v] == -1:
             dfs2(v, c)
 
@@ -266,10 +268,10 @@ for i in range(n):
 
 comp = [-1] * n
 c = 0
-for u in reversed(order):
+for u in reversed(order):          # highest finish time first
     if comp[u] == -1:
         dfs2(u, c)
-        c += 1
+        c += 1                     # each dfs2 call floods exactly one SCC
 ```
 
 SCC compression: build DAG with edges where `comp[u] != comp[v]`.
@@ -283,35 +285,40 @@ from collections import deque
 
 def bfs(s, t):
     parent = [-1] * n
-    parent[s] = s
-    q = deque([s])
-    while q:
-        u = q.popleft()
+    parent[s] = s                        # mark s visited without a real predecessor
+    queue = deque([s])
+    while queue:
+        u = queue.popleft()
         for v in range(n):
-            if parent[v] == -1 and cap[u][v] > 0:
+            if parent[v] == -1 and cap[u][v] > 0:    # unvisited and has residual capacity
                 parent[v] = u
                 if v == t:
                     return parent
-                q.append(v)
-    return None
+                queue.append(v)
+    return None                          # t is unreachable -> no augmenting path left
 
 flow = 0
 while True:
     parent = bfs(s, t)
     if not parent:
         break
+
+    # walk the path backward to find its bottleneck (smallest residual capacity)
     push = INF
     v = t
     while v != s:
         u = parent[v]
         push = min(push, cap[u][v])
         v = u
+
+    # apply that flow: forward edges shrink, reverse edges grow so it can be undone later
     v = t
     while v != s:
         u = parent[v]
         cap[u][v] -= push
         cap[v][u] += push
         v = u
+
     flow += push
 ```
 
