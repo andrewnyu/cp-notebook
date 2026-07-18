@@ -336,8 +336,8 @@ b, diameter = farthest(a)
 Tree DP formula:
 
 ```python
-height[u] = 1 + max(height[child])
-diameter = max(diameter, best_child_height_1 + best_child_height_2)
+height[u] = 1 + max(height[child] for child in children[u])   # tallest subtree hanging off u
+diameter = max(diameter, best_child_height_1 + best_child_height_2)  # longest path through u
 ```
 
 Be consistent: heights in edges gives diameter in edges; heights in nodes gives diameter in nodes.
@@ -347,24 +347,24 @@ Be consistent: heights in edges gives diameter in edges; heights in nodes gives 
 Fenwick: prefix sums / frequencies.
 
 ```python
-bit = [0] * (n + 1)
+bit = [0] * (n + 1)                # 1-indexed internally
 
 def add(i, x):
-    i += 1
+    i += 1                         # shift to 1-indexed
     while i <= n:
         bit[i] += x
-        i += i & -i
+        i += i & -i                # move to the next index whose range covers this one
 
 def sum_prefix(i):
-    i += 1
-    s = 0
+    i += 1                         # shift to 1-indexed
+    total = 0
     while i > 0:
-        s += bit[i]
-        i -= i & -i
-    return s
+        total += bit[i]
+        i -= i & -i                # drop down to the parent range
+    return total
 
-def range_sum(l, r):
-    return sum_prefix(r) - (sum_prefix(l - 1) if l else 0)
+def range_sum(left, right):
+    return sum_prefix(right) - (sum_prefix(left - 1) if left else 0)
 ```
 
 Segment tree: sum/min/max/gcd with point updates.
@@ -373,30 +373,30 @@ Segment tree: sum/min/max/gcd with point updates.
 size = 1
 while size < n:
     size *= 2
-seg = [0] * (2 * size)
+seg = [0] * (2 * size)          # seg[size + i] is leaf i; internal nodes hold subtree sums
 
 def set_val(i, x):
-    i += size
+    i += size                   # jump straight to the leaf
     seg[i] = x
     i //= 2
     while i:
-        seg[i] = seg[2*i] + seg[2*i+1]
+        seg[i] = seg[2 * i] + seg[2 * i + 1]    # recompute this ancestor from its two children
         i //= 2
 
-def query(l, r):              # inclusive
-    l += size
-    r += size
-    ans = 0
-    while l <= r:
-        if l % 2 == 1:
-            ans += seg[l]
-            l += 1
-        if r % 2 == 0:
-            ans += seg[r]
-            r -= 1
-        l //= 2
-        r //= 2
-    return ans
+def query(left, right):         # inclusive range [left, right]
+    left += size
+    right += size
+    total = 0
+    while left <= right:
+        if left % 2 == 1:       # left is a right child -> include it, then step past it
+            total += seg[left]
+            left += 1
+        if right % 2 == 0:      # right is a left child -> include it, then step past it
+            total += seg[right]
+            right -= 1
+        left //= 2
+        right //= 2
+    return total
 ```
 
 Use lazy propagation only for range updates.
