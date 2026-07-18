@@ -94,9 +94,10 @@ def dfs(pos, tight, started, state):
     limit = digits[pos] if tight else 9         # tight -> can't exceed the true digit here
     total = 0
     for d in range(limit + 1):
-        next_tight = tight and d == limit        # still pinned to the prefix so far?
-        next_started = started or d != 0          # has a nonzero digit appeared yet?
-        total += dfs(pos + 1, next_tight, next_started, trans(state, d, next_started))
+        next_tight = tight and d == limit          # still pinned to the prefix so far?
+        next_started = started or d != 0            # has a nonzero digit appeared yet?
+        next_state = trans(state, d, next_started)
+        total += dfs(pos + 1, next_tight, next_started, next_state)
     return total
 ```
 
