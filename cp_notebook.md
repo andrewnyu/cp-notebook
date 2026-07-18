@@ -390,16 +390,19 @@ Prefix tree for string sets / prefix queries.
 ```python
 class Trie:
     def __init__(self):
-        self.children = {}
-        self.end = False
+        self.children = {}   # char -> child Trie node
+        self.end = False     # True if some inserted word ends exactly at this node
 
     def insert(self, word):
         node = self
         for c in word:
+            # descend into child c, creating it on the fly if it doesn't exist yet
             node = node.children.setdefault(c, Trie())
-        node.end = True
+        node.end = True       # mark the last node reached as a real word end
 
     def _walk(self, word):
+        # follow `word` from the root; returns the landing node, or None if
+        # the path breaks partway (some prefix of `word` was never inserted)
         node = self
         for c in word:
             if c not in node.children:
@@ -408,35 +411,45 @@ class Trie:
         return node
 
     def search(self, word):
+        # exact word match: must reach the node AND it must be a word end,
+        # not just a prefix of some longer inserted word
         node = self._walk(word)
         return node is not None and node.end
 
     def starts_with(self, prefix):
+        # prefix match only: reaching the node is enough, end doesn't matter
         return self._walk(prefix) is not None
 ```
 
+Every op is O(len(word)) regardless of how many words are stored — cost is the string length, not the dictionary size.
+
 Array children (`[None] * 26`, index `ord(c) - ord('a')`) is faster when the alphabet is small and fixed.
 
-Binary trie for max XOR: insert bits high→low, then at query greedily walk toward the opposite bit.
+Binary trie for max XOR: insert numbers as root-to-leaf bit paths (MSB first), then for
+each query greedily prefer the branch with the opposite bit — that maximizes the XOR at
+that position, and greedy is safe since a high bit outweighs all lower bits combined.
 
 ```python
-BITS = 30
+BITS = 30   # highest bit index to consider; cover the max value in your input
 
 def insert(root, x):
     node = root
-    for b in range(BITS, -1, -1):
-        bit = (x >> b) & 1
+    for b in range(BITS, -1, -1):        # MSB -> LSB, so numbers sharing a
+        bit = (x >> b) & 1                # prefix share the same trie nodes
         if bit not in node:
             node[bit] = {}
         node = node[bit]
 
 def max_xor(root, x):
+    # walk the trie trying, at every bit, to go the OPPOSITE way from x's bit
+    # (opposite bits XOR to 1); falls back to the same-bit child if the
+    # opposite branch doesn't exist for any number inserted so far
     node, best = root, 0
     for b in range(BITS, -1, -1):
         bit = (x >> b) & 1
         want = bit ^ 1
         if want in node:
-            best |= 1 << b
+            best |= 1 << b    # this bit differs -> contributes to the XOR
             node = node[want]
         else:
             node = node[bit]
