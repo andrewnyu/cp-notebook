@@ -23,11 +23,14 @@ Use one postorder pass when parent needs multiple answers.
 ```python
 def dfs(u):
     if not u:
-        return (0, 0)          # skip, take
+        return (0, 0)          # empty subtree: (best if u is skipped, best if u is taken)
+
     l_skip, l_take = dfs(u.left)
     r_skip, r_take = dfs(u.right)
-    take = u.val + l_skip + r_skip
-    skip = max(l_skip, l_take) + max(r_skip, r_take)
+
+    take = u.val + l_skip + r_skip                    # taking u forces both children to be skipped
+    skip = max(l_skip, l_take) + max(r_skip, r_take)   # skipping u lets each child choose freely
+
     return (skip, take)
 ```
 
@@ -40,17 +43,21 @@ Single query on binary tree:
 ```python
 def lca(u, p, q):
     if not u or u == p or u == q:
-        return u
-    L = lca(u.left, p, q)
-    R = lca(u.right, p, q)
-    return u if L and R else L or R
+        return u                     # hit a target node, or fell past a leaf
+
+    left = lca(u.left, p, q)
+    right = lca(u.right, p, q)
+
+    if left and right:
+        return u                     # p and q found on different sides -> u is the split point
+    return left if left else right   # both live on whichever side came back non-None
 ```
 
 Many tree queries: binary lifting.
 
 ```python
-up[0][v] = parent[v]
-up[k][v] = up[k-1][up[k-1][v]]
+up[0][v] = parent[v]                   # 2^0 = 1 step up
+up[k][v] = up[k - 1][up[k - 1][v]]     # 2^k ancestor = two 2^(k-1) jumps chained together
 ```
 
 Lift deeper node first, then jump both from high power down.
@@ -60,11 +67,14 @@ Lift deeper node first, then jump both from high power down.
 Contiguous segment, choose split/pivot.
 
 ```python
-for length in range(2, n + 1):
-    for l in range(n - length + 1):
-        r = l + length
-        for m in range(l + 1, r):
-            dp[l][r] = max(dp[l][r], dp[l][m] + dp[m][r] + cost(l, m, r))
+for length in range(2, n + 1):                    # solve smaller intervals before bigger ones
+    for left in range(n - length + 1):
+        right = left + length
+        for mid in range(left + 1, right):        # try every way to split (left, right)
+            dp[left][right] = max(
+                dp[left][right],
+                dp[left][mid] + dp[mid][right] + cost(left, mid, right),
+            )
 ```
 
 Burst Balloons: add sentinel `1`s. `dp[l][r]` = best inside open interval `(l, r)`. Pivot `m` is last popped.
