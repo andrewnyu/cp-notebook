@@ -383,6 +383,66 @@ def query(l, r):              # inclusive
 
 Use lazy propagation only for range updates.
 
+## Trie
+
+Prefix tree for string sets / prefix queries.
+
+```python
+class Trie:
+    def __init__(self):
+        self.children = {}
+        self.end = False
+
+    def insert(self, word):
+        node = self
+        for c in word:
+            node = node.children.setdefault(c, Trie())
+        node.end = True
+
+    def _walk(self, word):
+        node = self
+        for c in word:
+            if c not in node.children:
+                return None
+            node = node.children[c]
+        return node
+
+    def search(self, word):
+        node = self._walk(word)
+        return node is not None and node.end
+
+    def starts_with(self, prefix):
+        return self._walk(prefix) is not None
+```
+
+Array children (`[None] * 26`, index `ord(c) - ord('a')`) is faster when the alphabet is small and fixed.
+
+Binary trie for max XOR: insert bits high→low, then at query greedily walk toward the opposite bit.
+
+```python
+BITS = 30
+
+def insert(root, x):
+    node = root
+    for b in range(BITS, -1, -1):
+        bit = (x >> b) & 1
+        if bit not in node:
+            node[bit] = {}
+        node = node[bit]
+
+def max_xor(root, x):
+    node, best = root, 0
+    for b in range(BITS, -1, -1):
+        bit = (x >> b) & 1
+        want = bit ^ 1
+        if want in node:
+            best |= 1 << b
+            node = node[want]
+        else:
+            node = node[bit]
+    return best
+```
+
 ## Pattern Map
 
 | Smell | Pattern |
@@ -397,3 +457,5 @@ Use lazy propagation only for range updates.
 | max bipartite/resource flow | max flow |
 | prefix sums/frequencies | Fenwick |
 | range min/max/sum + updates | segment tree |
+| prefix lookup / autocomplete | trie |
+| max XOR pair | binary trie |
