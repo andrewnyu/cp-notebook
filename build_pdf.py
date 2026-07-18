@@ -5,11 +5,12 @@ import sys
 from pathlib import Path
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import LETTER
+from reportlab.lib.pagesizes import LETTER, landscape
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Preformatted, Spacer, Table, TableStyle,
+    BaseDocTemplate, Frame, NextPageTemplate, PageTemplate, Paragraph,
+    Preformatted, Spacer, Table, TableStyle,
 )
 
 SRC = Path(__file__).parent / "cp_notebook.md"
@@ -122,7 +123,7 @@ def build_story(md_text: str):
             for r_idx, row in enumerate(rows):
                 style = table_header_style if r_idx == 0 else table_cell_style
                 data.append([Paragraph(inline_markup(c), style) for c in row])
-            tbl = Table(data, hAlign="LEFT", colWidths=[2.6 * inch, 3.6 * inch])
+            tbl = Table(data, hAlign="LEFT", colWidths=[3.2 * inch, 5.6 * inch])
             tbl.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.2, 0.2, 0.22)),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.Color(0.97, 0.97, 0.97)),
@@ -152,15 +153,62 @@ def build_story(md_text: str):
 
 def main():
     md_text = SRC.read_text()
-    doc = SimpleDocTemplate(
-        str(DST), pagesize=LETTER,
-        leftMargin=0.75 * inch, rightMargin=0.75 * inch,
-        topMargin=0.65 * inch, bottomMargin=0.65 * inch,
+
+    # Landscape, double-sided: mirrored margins so the wider "inner" margin
+    # always sits on the binding edge (left on odd/recto pages, right on
+    # even/verso pages) instead of alternating awkwardly.
+    pagesize = landscape(LETTER)
+    page_width, page_height = pagesize
+    inner_margin = 0.9 * inch   # binding-side margin
+    outer_margin = 0.6 * inch
+    top_margin = 0.6 * inch
+    bottom_margin = 0.6 * inch
+    frame_width = page_width - inner_margin - outer_margin
+    frame_height = page_height - top_margin - bottom_margin
+
+    odd_frame = Frame(
+        inner_margin, bottom_margin, frame_width, frame_height, id="odd_frame",
+    )
+    even_frame = Frame(
+        outer_margin, bottom_margin, frame_width, frame_height, id="even_frame",
+    )
+
+    doc = BaseDocTemplate(
+        str(DST), pagesize=pagesize,
         title="CP Notebook: Tricky Implementation Patterns",
     )
-    story = build_story(md_text)
+    doc.addPageTemplates([
+        PageTemplate(id="Odd", frames=[odd_frame]),
+        PageTemplate(id="Even", frames=[even_frame]),
+    ])
+
+    # page 1 uses "Odd" (the default, first-listed template); this cycle
+    # then alternates every page after that: 2=Even, 3=Odd, 4=Even, ...
+    story = [NextPageTemplate(["Even", "Odd"])] + build_story(md_text)
     doc.build(story)
+
+    _set_duplex_hint(DST)
     print(f"wrote {DST}")
+
+
+def _set_duplex_hint(path: Path):
+    """Embed a print-dialog hint for double-sided printing.
+
+    Binding is along the short edge of the landscape sheet (the left/right
+    vertical edge), so DuplexFlipShortEdge is the correct flip mode. Not
+    every viewer or print dialog honors this, but it's a safe no-op default.
+    """
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import DictionaryObject, NameObject
+
+    reader = PdfReader(str(path))
+    writer = PdfWriter()
+    writer.append(reader)
+    prefs = DictionaryObject()
+    prefs[NameObject("/Duplex")] = NameObject("/DuplexFlipShortEdge")
+    writer._root_object[NameObject("/ViewerPreferences")] = writer._add_object(prefs)
+    with open(path, "wb") as f:
+        writer.write(f)
 
 
 if __name__ == "__main__":
