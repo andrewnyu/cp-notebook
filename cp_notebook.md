@@ -89,15 +89,15 @@ from functools import cache
 @cache
 def dfs(pos, tight, started, state):
     if pos == len(digits):
-        return valid(started, state)
+        return valid(started, state)           # placed every digit; score this choice
 
-    limit = digits[pos] if tight else 9
-    ans = 0
+    limit = digits[pos] if tight else 9         # tight -> can't exceed the true digit here
+    total = 0
     for d in range(limit + 1):
-        ntight = tight and d == limit
-        nstarted = started or d != 0
-        ans += dfs(pos + 1, ntight, nstarted, trans(state, d, nstarted))
-    return ans
+        next_tight = tight and d == limit        # still pinned to the prefix so far?
+        next_started = started or d != 0          # has a nonzero digit appeared yet?
+        total += dfs(pos + 1, next_tight, next_started, trans(state, d, next_started))
+    return total
 ```
 
 If hand-memoizing, usually only memo when `tight == False`.
@@ -107,17 +107,18 @@ If hand-memoizing, usually only memo when `tight == False`.
 ```python
 from functools import cache
 
-full = (1 << n) - 1
+full_mask = (1 << n) - 1
 
 @cache
 def dfs(mask):
-    if mask == full:
-        return 0
-    ans = INF
+    if mask == full_mask:
+        return 0                                 # everything is placed/visited already
+
+    best = INF
     for i in range(n):
-        if not (mask & (1 << i)):
-            ans = min(ans, cost(i, mask) + dfs(mask | (1 << i)))
-    return ans
+        if not (mask & (1 << i)):                # bit i is unset -> i is still available
+            best = min(best, cost(i, mask) + dfs(mask | (1 << i)))
+    return best
 ```
 
 Checklist: `|` adds bit, `&` tests bit, base case reachable, memo active, loop indentation correct.
